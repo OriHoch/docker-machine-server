@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 
-LETSENCRYPT_DOMAIN="${1}"
+SERVER_NAME="${1}"
 SITE_NAME="${2}"
 NGINX_CONFIG_SNIPPET="${3}"
 
 echo 'server {
   listen 80;
   listen    [::]:80;
-  server_name '${LETSENCRYPT_DOMAIN}';
+  server_name '${SERVER_NAME}';
   include snippets/letsencrypt.conf;
   return 301 https://$host$request_uri;
 }
 server {
   listen 443 ssl http2;
   listen [::]:443 ssl http2;
-  server_name '${LETSENCRYPT_DOMAIN}';
+  server_name '${SERVER_NAME}';
   include snippets/letsencrypt_certs.conf;
   include snippets/ssl.conf;
   include snippets/letsencrypt.conf;

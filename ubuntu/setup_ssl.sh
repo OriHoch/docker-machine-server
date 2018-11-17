@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 LETSENCRYPT_EMAIL="${1}"
-LETSENCRYPT_DOMAIN="${2}"
+CERTBOT_PARAMS="${2}"
+LETSENCRYPT_DOMAIN="${3}"
 
-certbot certonly --agree-tos --email ${LETSENCRYPT_EMAIL} --webroot -w /var/lib/letsencrypt/ -d ${LETSENCRYPT_DOMAIN} &&\
+certbot certonly --agree-tos --email ${LETSENCRYPT_EMAIL} --webroot -w /var/lib/letsencrypt/ -d ${CERTBOT_PARAMS} &&\
 echo "
   ssl_certificate /etc/letsencrypt/live/${LETSENCRYPT_DOMAIN}/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/${LETSENCRYPT_DOMAIN}/privkey.pem;
