@@ -30,6 +30,15 @@ add_header Strict-Transport-Security "max-age=15768000; includeSubdomains; prelo
 add_header X-Frame-Options SAMEORIGIN;
 add_header X-Content-Type-Options nosniff;
 ' | tee /etc/nginx/snippets/ssl.conf &&\
+echo 'proxy_set_header X-Forwarded-For $remote_addr;
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Port $server_port;
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "Upgrade";
+proxy_read_timeout 900s;' | tee /etc/nginx/snippets/http2_proxy.conf &&\
+rm -f /etc/nginx/sites-enabled/* &&\
 echo 'server {
   listen 80;
   server_name _;

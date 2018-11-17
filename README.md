@@ -15,11 +15,15 @@ Follow the relevant driver documentation to create a machine with Ubuntu (known 
 Copy the docker-machine-server scripts to the machine:
 
 ```
+DOCKER_MACHINE_SERVER_VERSION=0.0.1
+
 docker-machine ssh $(docker-machine active) \
-    'sudo bash -c "rm -rf /opt/docker-machine-server-master && rm -f /opt/master.tar.gz &&\
-     mkdir -p /opt && cd /opt &&\
-     wget -q https://github.com/OriHoch/docker-machine-server/archive/master.tar.gz &&\
-     tar -xzf master.tar.gz && chmod +x /opt/docker-machine-server-master/ubuntu/*.sh &&\
+    'sudo bash -c "TEMPDIR=`mktemp -d` && cd \$TEMPDIR &&\
+     wget -q https://github.com/OriHoch/docker-machine-server/archive/v'${DOCKER_MACHINE_SERVER_VERSION}'.tar.gz &&\
+     tar -xzf 'v${DOCKER_MACHINE_SERVER_VERSION}'.tar.gz &&\
+     rm -rf /usr/local/src/docker-machine-server && mkdir -p /usr/local/src/docker-machine-server &&\
+     cp -rf docker-machine-server-'${DOCKER_MACHINE_SERVER_VERSION}'/* /usr/local/src/docker-machine-server/ &&\
+     chmod +x /usr/local/src/docker-machine-server/ubuntu/*.sh &&\
      echo Great Success"'
 ```
 
@@ -35,11 +39,11 @@ eval $(docker-machine env ${TARGET_DOCKER_MACHINE_NAME}) &&\
 docker-machine active
 ```
 
-Install and configure Nginx and Let's Encrypt
+Install and configure Nginx and Let's Encrypt (will delete existing configurations)
 
 ```
 docker-machine ssh $(docker-machine active) \
-    sudo /opt/docker-machine-server-master/ubuntu/install_nginx_ssl.sh
+    sudo /usr/local/src/docker-machine-server/ubuntu/install_nginx_ssl.sh
 ```
 
 Get the server's IP:
@@ -60,16 +64,21 @@ export CERTBOT_DOMAINS="subdomain1.your-domain.com,subdomain2.your-domain.com"
 export LETSENCRYPT_DOMAIN=subdomain1.your-domain.com
 
 docker-machine ssh $(docker-machine active) \
-    sudo /opt/docker-machine-server-master/ubuntu/setup_ssl.sh ${LETSENCRYPT_EMAIL} ${CERTBOT_DOMAINS} ${LETSENCRYPT_DOMAINS}
+    sudo /usr/local/src/docker-machine-server/ubuntu/setup_ssl.sh ${LETSENCRYPT_EMAIL} ${CERTBOT_DOMAINS} ${LETSENCRYPT_DOMAIN}
 ```
 
-Deploy your app, the docker-machine-server code includes an example web-app for testing
+If you are adding domains to existing certificate, restart nginx: `docker-machine ssh $(docker-machine active) sudo systemctl restart nginx`
 
-Build and run the web-app
+Deploy your app
+
+The docker-machine-server code includes an example web-app for testing
+
+Build and run the example web-app
 
 ```
 docker-machine ssh $(docker-machine active) \
-    sudo docker build -t flask-hello-world /opt/docker-machine-server-master/flask-hello-world &&\
+    sudo docker build -t flask-hello-world /usr/local/src/docker-machine-server/flask-hello-world &&\
+( docker-machine ssh $(docker-machine active) sudo docker rm -f flask-hello-world || true ) &&\
 docker-machine ssh $(docker-machine active) \
     sudo docker run -d --name flask-hello-world -p 5000:5000 flask-hello-world --host 0.0.0.0
 ```
@@ -82,21 +91,12 @@ docker-machine ssh $(docker-machine active) curl -s localhost:5000
 
 Create the nginx configuration on the server at `/etc/nginx/snippets/flask-hello-world`
 
-This example creates a proxy to the flask-hello-world at port 5000:
+This example creates an http/2 compatible reverse proxy to the flask-hello-world at port 5000:
 
 ```
 echo 'location / {
     proxy_pass http://localhost:5000;
-
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "Upgrade";
-    # This allows the ability for the execute shell window to remain open for up to 15 minutes. Without this parameter, the default is 1 minute and will automatically close.
-    proxy_read_timeout 900s;
+    include snippets/http2_proxy.conf;
 }' | docker-machine ssh $(docker-machine active) sudo tee /etc/nginx/snippets/flask-hello-world.conf
 ```
 
@@ -108,5 +108,51 @@ export SITE_NAME=flask-hello-world
 export NGINX_CONFIG_SNIPPET=flask-hello-world
 
 docker-machine ssh $(docker-machine active) \
-    sudo /opt/docker-machine-server-master/ubuntu/add_nginx_site.sh ${SERVER_NAME} ${SITE_NAME} ${NGINX_CONFIG_SNIPPET}
+    sudo /usr/local/src/docker-machine-server/ubuntu/add_nginx_site.sh ${SERVER_NAME} ${SITE_NAME} ${NGINX_CONFIG_SNIPPET}
+```
+
+Verify
+
+```
+curl https://${SERVER_NAME}
+```
+
+
+## Deploy Rancher to create a Kubernetes cluster
+
+Connect to the relevant Docker Machine
+
+```
+eval $(docker-machine env RANCHER_DOCKER_MACHINE_NAME)
+```
+
+Create the Rancher data directory
+
+```
+docker-machine ssh $(docker-machine active) sudo mkdir -p /var/lib/rancher
+```
+
+Start Rancher (recommended a machine of at least 2GB ram and 2 CPU cores)
+
+```
+docker run -d --name rancher --restart unless-stopped -p 8000:80 \
+              -v "/var/lib/rancher:/var/lib/rancher" rancher/rancher:stable
+```
+
+Register the SSL certificate and setup domain for Rancher
+
+Add Rancher to Nginx
+
+```
+export SERVER_NAME=rancher.your-domain.com
+export SITE_NAME=rancher
+export NGINX_CONFIG_SNIPPET=rancher
+
+echo 'location / {
+    proxy_pass http://localhost:8000;
+    include snippets/http2_proxy.conf;
+}' | docker-machine ssh $(docker-machine active) sudo tee /etc/nginx/snippets/${NGINX_CONFIG_SNIPPET}.conf &&\
+docker-machine ssh $(docker-machine active) \
+    sudo /usr/local/src/docker-machine-server/ubuntu/add_nginx_site.sh ${SERVER_NAME} ${SITE_NAME} ${NGINX_CONFIG_SNIPPET} &&\
+echo Great Success
 ```
