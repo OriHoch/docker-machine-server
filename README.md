@@ -12,38 +12,30 @@ Create a cloud account for one of the [supported drivers](https://docs.docker.co
 
 Follow the relevant driver documentation to create a machine with Ubuntu (known to work with 16.04 and 18.04).
 
-Copy the docker-machine-server scripts to the machine:
+Make sure you are connected to the relevant machine
+
+```
+eval $(docker-machine env YOUR_DOCKER_MACHINE_NAME) &&\
+docker-machine active
+```
+
+Initialize docker-machine-server v0.0.1 on the active machine
 
 ```
 DOCKER_MACHINE_SERVER_VERSION=0.0.1
 
-docker-machine ssh $(docker-machine active) \
-    'sudo bash -c "TEMPDIR=`mktemp -d` && cd \$TEMPDIR &&\
-     wget -q https://github.com/OriHoch/docker-machine-server/archive/v'${DOCKER_MACHINE_SERVER_VERSION}'.tar.gz &&\
-     tar -xzf 'v${DOCKER_MACHINE_SERVER_VERSION}'.tar.gz &&\
-     rm -rf /usr/local/src/docker-machine-server && mkdir -p /usr/local/src/docker-machine-server &&\
-     cp -rf docker-machine-server-'${DOCKER_MACHINE_SERVER_VERSION}'/* /usr/local/src/docker-machine-server/ &&\
-     chmod +x /usr/local/src/docker-machine-server/ubuntu/*.sh &&\
-     echo Great Success"'
+curl -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v${DOCKER_MACHINE_SERVER_VERSION}/docker-machine-server.sh \
+    | bash -s $DOCKER_MACHINE_SERVER_VERSION
 ```
+
+If you want to install latest dev version of docker-machine-server - clone the code, and run the following from the docker-machine-server project directory: `./docker-machine-server.sh init_dev`
 
 ## Deploy an app and expose via SSL
-
-Set the target machine as the active Docker Machine
-
-```
-
-export TARGET_DOCKER_MACHINE_NAME=your-docker-machine
-
-eval $(docker-machine env ${TARGET_DOCKER_MACHINE_NAME}) &&\
-docker-machine active
-```
 
 Install and configure Nginx and Let's Encrypt (will delete existing configurations)
 
 ```
-docker-machine ssh $(docker-machine active) \
-    sudo /usr/local/src/docker-machine-server/ubuntu/install_nginx_ssl.sh
+docker-machine ssh $(docker-machine active) sudo docker-machine-server install_nginx_ssl
 ```
 
 Get the server's IP:
@@ -52,36 +44,29 @@ Get the server's IP:
 docker-machine ip $(docker-machine active)
 ```
 
-Register a subdomain to point to that IP
+Register a subdomain to point to that IP (for maximal security, add a CAA record: `example.org. CAA 128 issue "letsencrypt.org"`)
 
-Register the SSL certificate, you may run this multiple times to add additional sub-domains
+Register the SSL certificates (can add additional subdomains later, see below)
 
 ```
-export LETSENCRYPT_EMAIL=your@email.com
-export CERTBOT_DOMAINS="subdomain1.your-domain.com,subdomain2.your-domain.com"
+LETSENCRYPT_EMAIL=your@email.com
+CERTBOT_DOMAINS="subdomain1.your-domain.com,subdomain2.your-domain.com"
 
 # this should be the first one of the CERTBOT_DOMAINS
-export LETSENCRYPT_DOMAIN=subdomain1.your-domain.com
+LETSENCRYPT_DOMAIN=subdomain1.your-domain.com
 
-docker-machine ssh $(docker-machine active) \
-    sudo /usr/local/src/docker-machine-server/ubuntu/setup_ssl.sh ${LETSENCRYPT_EMAIL} ${CERTBOT_DOMAINS} ${LETSENCRYPT_DOMAIN}
+docker-machine ssh $(docker-machine active) sudo docker-machine-server setup_ssl ${LETSENCRYPT_EMAIL} ${CERTBOT_DOMAINS} ${LETSENCRYPT_DOMAIN}
 ```
 
-If you are adding domains to existing certificate, restart nginx: `docker-machine ssh $(docker-machine active) sudo systemctl restart nginx`
+Deploy an app - you can use standard `docker run` while connected to the machine.
 
-Deploy your app
+The docker-machine-server code includes an example web-app for testing, to use it -
+* Clone the docker-machine-server code: `git clone https://github.com/OriHoch/docker-machine-server.git`
+* Change to docker-machine-server directory: `cd docker-machine-server`
+* Build: `docker build -t flask-hello-world flask-hello-world`
+* Run: `docker run -d --name flask-hello-world -p 5000:5000 flask-hello-world --host 0.0.0.0`
 
-The docker-machine-server code includes an example web-app for testing
-
-Build and run the example web-app
-
-```
-docker-machine ssh $(docker-machine active) \
-    sudo docker build -t flask-hello-world /usr/local/src/docker-machine-server/flask-hello-world &&\
-( docker-machine ssh $(docker-machine active) sudo docker rm -f flask-hello-world || true ) &&\
-docker-machine ssh $(docker-machine active) \
-    sudo docker run -d --name flask-hello-world -p 5000:5000 flask-hello-world --host 0.0.0.0
-```
+Following commands assume your are deploying the Flask app, modify relevant configurations as needed
 
 Verify that the app is running:
 
@@ -89,26 +74,15 @@ Verify that the app is running:
 docker-machine ssh $(docker-machine active) curl -s localhost:5000
 ```
 
-Create the nginx configuration on the server at `/etc/nginx/snippets/flask-hello-world`
-
-This example creates an http/2 compatible reverse proxy to the flask-hello-world at port 5000:
+Add the app to Nginx
 
 ```
-echo 'location / {
-    proxy_pass http://localhost:5000;
-    include snippets/http2_proxy.conf;
-}' | docker-machine ssh $(docker-machine active) sudo tee /etc/nginx/snippets/flask-hello-world.conf
-```
+SERVER_NAME=flask-hello-world.your-domain.com
+SITE_NAME=flask-hello-world
+NGINX_CONFIG_SNIPPET=flask-hello-world
+PROXY_PASS_PORT=5000
 
-Add the flask-hello-world app to Nginx
-
-```
-export SERVER_NAME=flask-hello-world-subdomain.your-domain.com
-export SITE_NAME=flask-hello-world
-export NGINX_CONFIG_SNIPPET=flask-hello-world
-
-docker-machine ssh $(docker-machine active) \
-    sudo /usr/local/src/docker-machine-server/ubuntu/add_nginx_site.sh ${SERVER_NAME} ${SITE_NAME} ${NGINX_CONFIG_SNIPPET}
+docker-machine ssh $(docker-machine active) sudo docker-machine-server add_nginx_site_http2_proxy ${SERVER_NAME} ${SITE_NAME} ${NGINX_CONFIG_SNIPPET} ${PROXY_PASS_PORT}
 ```
 
 Verify
@@ -117,42 +91,30 @@ Verify
 curl https://${SERVER_NAME}
 ```
 
+## Register additional SSL sub/domains
 
-## Deploy Rancher to create a Kubernetes cluster
-
-Connect to the relevant Docker Machine
-
-```
-eval $(docker-machine env RANCHER_DOCKER_MACHINE_NAME)
-```
-
-Create the Rancher data directory
+Get list of currently registered domains:
 
 ```
-docker-machine ssh $(docker-machine active) sudo mkdir -p /var/lib/rancher
+docker-machine ssh $(docker-machine active) sudo cat /etc/docker-machine-server/CERTBOT_DOMAINS
 ```
 
-Start Rancher (recommended a machine of at least 2GB ram and 2 CPU cores)
+Get the server's IP:
 
 ```
-docker run -d --name rancher --restart unless-stopped -p 8000:80 \
-              -v "/var/lib/rancher:/var/lib/rancher" rancher/rancher:stable
+docker-machine ip $(docker-machine active)
 ```
 
-Register the SSL certificate and setup domain for Rancher
+Set DNS for a subdomain to point to that IP (for maximal security, add a CAA record: `example.org. CAA 128 issue "letsencrypt.org"`)
 
-Add Rancher to Nginx
+Register the domain with certbot
 
 ```
-export SERVER_NAME=rancher.your-domain.com
-export SITE_NAME=rancher
-export NGINX_CONFIG_SNIPPET=rancher
+ADD_CERTBOT_DOMAIN="my-subdomain.your-domain.com"
 
-echo 'location / {
-    proxy_pass http://localhost:8000;
-    include snippets/http2_proxy.conf;
-}' | docker-machine ssh $(docker-machine active) sudo tee /etc/nginx/snippets/${NGINX_CONFIG_SNIPPET}.conf &&\
-docker-machine ssh $(docker-machine active) \
-    sudo /usr/local/src/docker-machine-server/ubuntu/add_nginx_site.sh ${SERVER_NAME} ${SITE_NAME} ${NGINX_CONFIG_SNIPPET} &&\
-echo Great Success
+docker-machine ssh $(docker-machine active) sudo docker-machine-server add_certbot_domain ${ADD_CERTBOT_DOMAIN}
 ```
+
+## docker-machine-server apps
+
+See the [Apps Catalog](APPS.md) for guides to install applications / services on docker-machine-server.
