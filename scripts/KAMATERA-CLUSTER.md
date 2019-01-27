@@ -88,7 +88,7 @@ Set the default Docker for nodes to the supported version
 Add the Kamatera Docker Machine driver
 
 * Node Drivers > Add Node Driver >
-    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.0-RC1/docker-machine-driver-kamatera_v1.0.0-RC1_linux_amd64.tar.gz`
+    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.0-RC2/docker-machine-driver-kamatera_v1.0.0-RC2_linux_amd64.tar.gz`
     * Create
 * Node Drivers > Wait for Kamatera driver to be active
 
