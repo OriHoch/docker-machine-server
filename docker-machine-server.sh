@@ -69,12 +69,17 @@ proxy_set_header X-Forwarded-Proto $scheme;
 proxy_set_header X-Forwarded-Port $server_port;
 proxy_http_version 1.1;
 proxy_set_header Upgrade $http_upgrade;
-proxy_set_header Connection "Upgrade";
+proxy_set_header Connection $connection_upgrade;
 proxy_read_timeout 900s;' | tee /etc/nginx/snippets/http2_proxy.conf &&\
 info Clearing existing Nginx sites from /etc/nginx/sites-enabled &&\
 rm -f /etc/nginx/sites-enabled/* &&\
 info Saving /etc/nginx/sites-enabled/default &&\
-echo 'server {
+echo '
+map $http_upgrade $connection_upgrade {
+    default Upgrade;
+    '"''"'      close;
+}
+server {
   listen 80;
   server_name _;
   include snippets/letsencrypt.conf;
@@ -138,7 +143,12 @@ add_nginx_site() {
     info Adding nginx Site &&\
     info SERVER_NAME=${SERVER_NAME} SITE_NAME=${SITE_NAME} NGINX_CONFIG_SNIPPET=${NGINX_CONFIG_SNIPPET} &&\
     info Saving /etc/nginx/sites-enabled/${SITE_NAME} &&\
-    echo 'server {
+    echo '
+map $http_upgrade $connection_upgrade {
+    default Upgrade;
+    '"''"'      close;
+}
+server {
   listen 80;
   listen    [::]:80;
   server_name '${SERVER_NAME}';

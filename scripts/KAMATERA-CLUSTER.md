@@ -14,12 +14,22 @@ Make sure you have all the required prerequisites before starting:
 * Access to set DNS A records for Rancher and Jenkins (e.g. rancher.your-domain.com / jenkins.your-domain.com)
 * Email address to use for Let's Encrypt registration
 
+## Create an internal VLAN network
+
+* From the Kamatera console web-ui:
+    * My Cloud > Networks > Create New Network:
+        * VLAN Name: my-cluster
+        * IP Address Scope: 172.16.0.0 / 23
+        * Create Network
+    * My Cloud > Servers
+        * Edit each server and assign to the VLAN with an internal IP
+
 ## Create and setup the cluster management machine
 
 Install the `docker-machine-server.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.2/docker-machine-server.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.3/docker-machine-server.sh \
     | sudo tee /usr/local/bin/docker-machine-server.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/docker-machine-server.sh
 ```
@@ -27,21 +37,47 @@ sudo chmod +x /usr/local/bin/docker-machine-server.sh
 Install the `kamatera-cluster.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.2/scripts/kamatera-cluster.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.3/scripts/kamatera-cluster.sh \
     | sudo tee /usr/local/bin/kamatera-cluster.sh >/dev/null &&\
-sudo chmod +x /usr/local/bin/kamatera-cluster.sh &&\
-kamatera-cluster.sh
+sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 ```
 
-Run the interactive Kamatera management server creation script:
+Run the interactive management server creation script:
 
 ```
-kamatera-cluster.sh "0.0.2"
+kamatera-cluster.sh "0.0.3" "your-private-network-name"
 ```
+
+## Deploy an NFS server for cluster storage
+
+You can deploy the NFS server to the management machine or a dedicated machine
+
+ssh to the storage machine:
+
+```
+docker-machine ssh my-machine
+```
+
+Run the following from the SSH shell of the relevant machine to setup NFS:
+
+```
+apt install -y nfs-kernel-server &&\
+mkdir -p /srv/default && echo "Hello from Kamatera!" > /srv/default/hello.txt &&\
+chown -R nobody:nogroup /srv/default/ && chmod 777 /srv/default/ &&\
+echo '/srv/default *(rw,sync,no_subtree_check)' > /etc/exports &&\
+exportfs -a &&\
+systemctl restart nfs-kernel-server
+```
+
+Get the server's private IP from the Kamatera Console
+
+To use this NFS share, use the private IP from any machine on the same network.
+
+NFS mount path should be a subpath under /srv/default/
 
 ## Create a Kubernetes cluster using Rancher
 
-Access the Rancher web-UI at your domain
+Access the Rancher web-UI at your domain and run the first time setup
 
 Set the default Docker for nodes to the supported version
 
@@ -56,41 +92,75 @@ Add the Kamatera Docker Machine driver
     * Create
 * Node Drivers > Wait for Kamatera driver to be active
 
-Create the cluster
+Create the first cluster node
 
 * Clusters > Add cluster >
     * From nodes in an infrastructure provider: Kamatera
-    * Cluster name: ``
-    * Workers node pool:
-        * Name Prefix: `your-prefix-workers`
+    * Cluster name: `my-cluster`
+    * main node pool
+        * Name Prefix: `my-cluster-pool`
         * Count: 1
         * Template: create new template:
             * apiClientId / apiSecret: set your Kamatera credentials
             * Set options according to your requirements, see [Kamatera server options](https://console.kamatera.com/service/server) for the available options (must be logged-in to Kamatera console)
             * CPU must be at least: `2B`
             * RAM must be at least: `2048`
+            * Disk size must be at least: `30`
+            * Private Network Name: your-private-network-name
             * Name: `kamatera-node`
+            * Engine options > Storage Driver: `overlay2`
             * Create template
-        * set checkbox: Worker
-    * Control plane node pool
-        * Add Node Pool:
-        * Name Prefix: `your-prefix-control`
-        * Count: 1
-        * Template: `kamatera-node`
-        * Set checkboxes: etcd, Control Plane
+        * set checkboxex: etcd, Control Plane, Worker
     * Create cluster
 * Wait for cluster to be provisioned
-    * If any nodes fail to provision, add more nodes until the cluster is operational, then you can delete any nodes which failed to provision.
-    * To add nodes:
-        * your cluster > nodes > Click on plus sign for the relevant node pool
 
-## Cluster introduction and sanity test
+After the first node was provisioned, you can add additional nodes:
 
-The following guide serves as an introduction to Rancher / Kubernetes and a sanity test for the cluster.
+* Cluster > Nodes > click on the plus sign to add nodes, to ensure private IP allocation, add 1 node at a time
 
-The guide focuses on using existing shell scripting skills in a Rancher / Kubernetes context.
+## Install a storage class
 
-Deploy some test workloads:
+A storage class allows deployments to use the NFS server from any workload
+
+Deploy the nfs-client-provisioner:
+
+* Global > Catalogs > Enable Helm Stable catalog
+* Default > Catalog Apps > Launch nfs-client-provisioner chart:
+    * Set the following values:
+        * `nfs.server=x.x.x.x`
+        * `nfs.path=/srv/default`
+
+## Install private Docker registry
+
+Deploy docker-registry to provide private registry services to the cluster
+
+Create an htpasswd user/password for the private registry authentication:
+
+Run the following from your local PC (replace USERNAME / PASSWORD):
+
+```
+docker run --entrypoint htpasswd registry:2 -Bbn USERNAME PASSWORD
+```
+
+Copy the last output line and use as the secrets.htpasswd value
+
+* Default > Catalog Apps >
+    * Launch docker-registry (from Helm)
+    * Set the following values to configure storage:
+        * `secrets.htpasswd	= THE_HTPASSWD_SECRET_VALUE`
+        * `persistence.enabled = true`
+        * `persistence.size = 20Gi`
+        * `persistence.storageClass = nfs-client`
+
+Add the registry to Rancher
+
+* Default > Resources > Registries > Add Registry:
+    * Name: `my-registry`
+    * Available to all namespaces in project
+    * Address: custom - `docker-registry.docker-registry` - REGISTRY_USERNAME - REGISTRY_PASSWORD
+    * Save
+
+## Deploy test workloads
 
 * Rancher > your-cluster > default >
     * Workloads > Deploy >
@@ -108,15 +178,22 @@ Deploy some test workloads:
         * Namespace: `test`
         * Launch
 
+Verify the deployments -
+
 Execute a shell on the Ubuntu deployment
 
 * your-cluster > default >
     * Workloads > ubuntu > Execute shell:
 
-From the ubuntu shell, install postgresql and start a database shell to the Postgresql service:
+From the ubuntu shell, install postgresql:
 
 ```
 apt-get update && apt-get install -y postgresql-client
+```
+
+Start a postgres database shell:
+
+```
 PGPASSWORD=123456 psql -h postgres -U postgres -d postgres
 ```
 
@@ -151,11 +228,13 @@ Close the Rancher ubuntu shell
         * You can see this workload is served by 3 pods
         * The pods don't share any volumes, so each DB is independent
 
+### Add a sidecar to the postgres workload
+
 To make sure all DBs have the same table and row on startup we could use a sidecar
 
 The sidecar runs alongside each pod and can be used to do initialization, management or health checks
 
-First, we'll create a configmap which will contain the script the sidecar will run
+First, we'll create a configmap which contains the script the sidecar will run
 
 * Rancher web-ui > your cluster > Default >
     * Resources > Config Maps > Add config map >
@@ -198,8 +277,7 @@ Add the sidecar to the postgres workload:
                 * Name: `sidecar`
                 * Sidecar type: `Standard Container`
                 * Docker image: `ubuntu`
-                * Volumes > Add Volume >
-                    * Volume Name: `sidecar-configmap`
+                * Volumes > Add Volume > use a config map
                     * Config Map: `postgres-sidecar`
                     * Mount point: `/sidecar-configmap`
                 * Show advanced options >
@@ -225,6 +303,8 @@ PGPASSWORD=123456 psql -h postgres -U postgres -d postgres -c "select * from foo
 ```
 
 Rerun the last command a few times to make sure it returns successfully each time
+
+### Create a web-app
 
 This DB doesn't do anything useful without a web-app
 
@@ -265,7 +345,7 @@ exec python2.7 -m flask run -h 0.0.0.0
 ```
 FROM ubuntu
 RUN apt-get update && apt-get install -y python-flask python-psycopg2
-COPY app.py entrypoint.sh /usrc/src/
+COPY app.py entrypoint.sh /usr/src/
 ENTRYPOINT ["bash", "/usr/src/entrypoint.sh"]
 ```
 
@@ -279,18 +359,21 @@ stages:
       dockerfilePath: ./Dockerfile
       buildContext: .
       tag: test-web-app
+      pushRemote: true
+      registry: docker-registry.docker-registry
 timeout: 240
 ```
+
+Setup Rancher pipelines to build your Docker image
 
 * Rancher web-ui > your cluster > Default > Resources > Pipelines >
     * Follow the instructions to connect your private GitHub repository
     * Enable pipelines for the test-web-app repository
+    * Trigger the test-web-app pipeline
+    * On first pipeline run it may take a few minutes for Rancher to install Jenkins
+    * If a job fails, try to Rerun it
 
-Check the status and progress of the pipeline job under Workloads > Pipelines
-
-If a job fails, try to Rerun it
-
-On first pipeline run it may take a few minutes for Rancher to install Jenkins
+Deploy the web-app workload using the published image
 
 * Deploy a new workload in namespace `test`:
     * Name: web-app
@@ -302,12 +385,9 @@ On first pipeline run it may take a few minutes for Rancher to install Jenkins
         * HTTP request returns a successful status
         * Request Path: `/`
         * Target container port: `5000`
-    * Volumes > Add Volume > Config Map >
-        * Config map name: web-app
-        * Mount Point: /usr/src
-    * Show advanced options >
-        * Command > Command: `/bin/bash /usr/src/entrypoint.sh`
     * Launch
+
+Add an ingress to expose the web-app
 
 * Create an Ingress to expose the web-app:
     * Workloads > Load Balancing > Add Ingress:
@@ -329,9 +409,7 @@ Test with curl that it works:
 curl -H "Host: test-web-app.your-domain.com" http://your.node.ip.address/
 ```
 
-You can now set a DNS A record to that IP
-
-
+You can now set a DNS A record to that IP and set an SSL certificate by editing the web-app Ingress
 
 ## Next Steps
 

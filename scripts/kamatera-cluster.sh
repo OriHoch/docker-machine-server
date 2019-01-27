@@ -105,7 +105,7 @@ create_or_update_machine() {
         _kamatera_curl /service/server > $TEMPFILE
         echo Choose server settings from the available options
         cat $TEMPFILE | jq .ram -c
-        read -p "RAM (recommended at least 2048): " KAMATERA_RAM
+        read -p "RAM (recommended at least 4096): " KAMATERA_RAM
         cat $TEMPFILE | jq .cpu -c
         read -p "CPU (recommended at least 2B): " KAMATERA_CPU
         cat $TEMPFILE | jq .datacenters -c
@@ -121,6 +121,7 @@ create_or_update_machine() {
         export KAMATERA_DISK_SIZE
         export KAMATERA_API_SECRET
         export KAMATERA_API_CLIENT_ID
+        export KAMATERA_PRIVATE_NETWORK_NAME="${1}"
         ! docker-machine create -d kamatera "${MACHINE_NAME}" && echo Failed to create the management machine && return 1
         echo cluster management machine ${MACHINE_NAME} created successfully
     fi
@@ -177,7 +178,7 @@ intro &&\
 preflight &&\
 initialize_kamatera &&\
 initialize_docker_machine_driver_kamatera &&\
-create_or_update_machine &&\
+create_or_update_machine "${2}" &&\
 install_or_update_rancher "${1}"
 [ "$?" != "0" ] && exit 1
 
