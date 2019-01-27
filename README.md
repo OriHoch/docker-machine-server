@@ -10,7 +10,7 @@ Scripts and documentation for rapid deployment and management of servers running
 
 Create a cloud account for one of the [supported drivers](https://docs.docker.com/machine/drivers/) or [3rd party drivers](https://github.com/docker/docker.github.io/blob/master/machine/AVAILABLE_DRIVER_PLUGINS.md).
 
-Follow the relevant driver documentation to create a machine with Ubuntu (known to work with 16.04 and 18.04).
+Follow the relevant driver documentation to create a machine with Ubuntu 18.04
 
 Make sure you are connected to the relevant machine
 
@@ -19,11 +19,15 @@ eval $(docker-machine env YOUR_DOCKER_MACHINE_NAME) &&\
 docker-machine active
 ```
 
-Initialize docker-machine-server v0.0.1 on the active machine
+Choose a Docker Machine server [release](https://github.com/OriHoch/docker-machine-server/releases) to deploy and set in environment variable
 
 ```
 DOCKER_MACHINE_SERVER_VERSION=0.0.1
+```
 
+Initialize docker-machine-server on the active machine
+
+```
 curl -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v${DOCKER_MACHINE_SERVER_VERSION}/docker-machine-server.sh \
     | bash -s $DOCKER_MACHINE_SERVER_VERSION
 ```
