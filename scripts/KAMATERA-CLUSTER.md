@@ -66,11 +66,13 @@ docker-machine ssh my-machine
 
 Run the following from the SSH shell of the relevant machine to setup NFS:
 
+If you used a different subnet for your private IP, modify it in the script below to limit access only to your private subnet
+
 ```
 apt install -y nfs-kernel-server &&\
 mkdir -p /srv/default && echo "Hello from Kamatera!" > /srv/default/hello.txt &&\
 chown -R nobody:nogroup /srv/default/ && chmod 777 /srv/default/ &&\
-echo '/srv/default *(rw,sync,no_subtree_check)' > /etc/exports &&\
+echo '/srv/default 172.16.0.0/23(rw,sync,no_subtree_check)' > /etc/exports &&\
 exportfs -a &&\
 systemctl restart nfs-kernel-server
 ```
