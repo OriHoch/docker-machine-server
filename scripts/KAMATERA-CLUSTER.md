@@ -11,7 +11,7 @@ Make sure you have all the required prerequisites before starting:
   * Standard Linux apps like Bash, Curl
   * Docker and Docker Machine: https://docs.docker.com/machine/install-machine/
   * jq: https://stedolan.github.io/jq/
-* Access to set DNS A records for Rancher and Jenkins (e.g. rancher.your-domain.com / jenkins.your-domain.com)
+* Access to set DNS A records for Rancher (e.g. rancher.your-domain.com)
 * Email address to use for Let's Encrypt registration
 
 ## Create an internal VLAN network
