@@ -423,6 +423,12 @@ curl -H "Host: test-web-app.your-domain.com" http://your.node.ip.address/
 
 You can now set a DNS A record to that IP and set an SSL certificate by editing the web-app Ingress
 
+## Cleanup
+
+The cleanup script at `scripts/kamatera-cleanup.py` in this repository can be used to delete all kamatera servers in your account
+
+It should run with a Python 3.6 interpreter
+
 ## Next Steps
 
 * [Kubernetes documentation](https://kubernetes.io/docs/home/)
