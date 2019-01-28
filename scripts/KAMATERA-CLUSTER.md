@@ -21,8 +21,6 @@ Make sure you have all the required prerequisites before starting:
         * VLAN Name: my-cluster
         * IP Address Scope: 172.16.0.0 / 23
         * Create Network
-    * My Cloud > Servers
-        * Edit each server and assign to the VLAN with an internal IP
 
 ## Create and setup the cluster management machine
 
