@@ -48,6 +48,14 @@ Run the interactive management server creation script:
 kamatera-cluster.sh "0.0.3" "your-private-network-name"
 ```
 
+## Initialize Rancher
+
+Access the Rancher web-ui and run the initial setup
+
+Enable the Helm Stable catalog:
+
+* Global > Catalogs > Enable Helm Stable catalog
+
 ## Deploy an NFS server for cluster storage
 
 You can deploy the NFS server to the management machine or a dedicated machine
@@ -92,13 +100,13 @@ Add the Kamatera Docker Machine driver
     * Create
 * Node Drivers > Wait for Kamatera driver to be active
 
-Create the first cluster node
+Create the cluster
 
 * Clusters > Add cluster >
     * From nodes in an infrastructure provider: Kamatera
     * Cluster name: `my-cluster`
-    * main node pool
-        * Name Prefix: `my-cluster-pool`
+    * controlplane node pool
+        * Name Prefix: `my-cluster-controlplane`
         * Count: 1
         * Template: create new template:
             * apiClientId / apiSecret: set your Kamatera credentials
@@ -110,13 +118,16 @@ Create the first cluster node
             * Name: `kamatera-node`
             * Engine options > Storage Driver: `overlay2`
             * Create template
-        * set checkboxex: etcd, Control Plane, Worker
+        * set checkboxes: etcd, Control Plane
+    * workers node pool
+        * Name Prefix: `my-cluster-workers`
+        * Count: 2
+        * Template: `kamatera-node`
+        * Set checkboxes: etcd, workers
     * Create cluster
 * Wait for cluster to be provisioned
-
-After the first node was provisioned, you can add additional nodes:
-
-* Cluster > Nodes > click on the plus sign to add nodes, to ensure private IP allocation, add 1 node at a time
+    * Some nodes might fail to create due to private IP allocation collision
+    * You can wait and Rancher will retry creation, or delete the failed nodes to speed-up the retry
 
 ## Install a storage class
 
@@ -124,7 +135,6 @@ A storage class allows deployments to use the NFS server from any workload
 
 Deploy the nfs-client-provisioner:
 
-* Global > Catalogs > Enable Helm Stable catalog
 * Default > Catalog Apps > Launch nfs-client-provisioner chart:
     * Set the following values:
         * `nfs.server=x.x.x.x`
@@ -157,7 +167,7 @@ Add the registry to Rancher
 * Default > Resources > Registries > Add Registry:
     * Name: `my-registry`
     * Available to all namespaces in project
-    * Address: custom - `docker-registry.docker-registry` - REGISTRY_USERNAME - REGISTRY_PASSWORD
+    * Address: custom - `localhost:5000` - REGISTRY_USERNAME - REGISTRY_PASSWORD
     * Save
 
 ## Deploy test workloads
@@ -169,13 +179,15 @@ Add the registry to Rancher
         * Docker image: `postgres`
         * Namespace: `test`
         * Add port: 5432 - TCP - Cluster IP - Same as container port
-        * Environment variables > Add variable > `POSTGRES_PASSWORD` = `123456`
+        * Environment variables > Add variable > `POSTGRES_PASSWORD=123456`
         * Launch
     * Workloads > Deploy >
         * Name: `ubuntu`
         * Scalable deployment of `1` pods
         * Docker image: `ubuntu`
         * Namespace: `test`
+        * Volumes > Add persistent volume > name: ubuntu-data, use a storage class: nfs-client, capacity: 1Gi
+        * Volume mount point: /data, sub path in volume: ubuntu-data
         * Launch
 
 Verify the deployments -
