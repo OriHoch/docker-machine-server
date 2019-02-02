@@ -24,7 +24,8 @@ Start Rancher
 
 ```
 docker run -d --name rancher --restart unless-stopped -p 8000:80 \
-           -v "/var/lib/rancher:/var/lib/rancher" rancher/rancher:stable
+           -v "/var/lib/rancher:/var/lib/rancher" rancher/rancher:stable \
+           --no-cacerts --audit-log-path /dev/stdout --audit-level 1
 ```
 
 Register DNS and update the SSL certificate to include Rancher subdomain
