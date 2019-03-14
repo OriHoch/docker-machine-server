@@ -59,6 +59,36 @@ Run the interactive management server creation script:
 kamatera-cluster.sh "0.0.4" "lan-12345-private-network-name"
 ```
 
+**troubleshooting server creation**
+
+In case of any errors, try to re-run the script and provide the name of an existing Docker Machine.
+It will re-initialize which may fix some problems encountered in initial setup due to starting of services.
+
+In case of errors with not being able to reach the web-ui, run the following to reinitialize:
+
+Set environment variables:
+
+```
+RANCHER_MACHINE_NAME=
+RANCHER_DOMAIN_NAME=
+
+LETSENCRYPT_EMAIL="your-email@example.com"
+LETSENCRYPT_DOMAIN="${RANCHER_DOMAIN_NAME}"
+CERTBOT_DOMAINS="${LETSENCRYPT_DOMAIN}"
+```
+
+Run the initialization commands:
+
+* Install Nginx and Let's Encrypt:
+  * `docker-machine ssh "${RANCHER_MACHINE_NAME}" sudo docker-machine-server install_nginx_ssl`
+
+* Register SSL certificates:
+  * `docker-machine ssh "${RANCHER_MACHINE_NAME}" sudo docker-machine-server setup_ssl "${LETSENCRYPT_EMAIL}" "${CERTBOT_DOMAINS}" "${LETSENCRYPT_DOMAIN}"`
+
+* Add Rancher to Nginx:
+  * `docker-machine ssh "${RANCHER_MACHINE_NAME}" sudo docker-machine-server add_nginx_site_http2_proxy "${RANCHER_DOMAIN_NAME}" rancher rancher 8000`
+
+
 ## Initialize Rancher
 
 Access the Rancher web-ui and run the initial setup
