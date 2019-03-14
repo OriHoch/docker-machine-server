@@ -13,6 +13,8 @@ Make sure you have all the required prerequisites before starting:
   * jq: https://stedolan.github.io/jq/
 * Access to set DNS A records for Rancher (e.g. rancher.your-domain.com)
 * Email address to use for Let's Encrypt registration
+* Verify docker-machine version - script was tested with Docker Machine v0.16.1
+  * `docker-machine version`
 
 ## Create an internal VLAN network
 
@@ -20,6 +22,9 @@ Make sure you have all the required prerequisites before starting:
     * My Cloud > Networks > Create New Network:
         * VLAN Name: my-cluster
         * IP Address Scope: 172.16.0.0 / 23
+          * **important** Changing the IP Address scope requires additional changes in next installation steps
+        * Gateway: No Gateway
+        * DNS: leave empty
         * Create Network
 
 ## Create and setup the cluster management machine
@@ -27,7 +32,7 @@ Make sure you have all the required prerequisites before starting:
 Install the `docker-machine-server.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.3/docker-machine-server.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.4/docker-machine-server.sh \
     | sudo tee /usr/local/bin/docker-machine-server.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/docker-machine-server.sh
 ```
@@ -35,15 +40,23 @@ sudo chmod +x /usr/local/bin/docker-machine-server.sh
 Install the `kamatera-cluster.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.3/scripts/kamatera-cluster.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.4/scripts/kamatera-cluster.sh \
     | sudo tee /usr/local/bin/kamatera-cluster.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/kamatera-cluster.sh
+```
+
+**important** Make sure no other Docker Machines are being created in parallel, this may cause errors in machine creation in some conditions.
+
+Set the Rancher version, leave empty to use the default:
+
+```
+export RANCHER_VERSION=v2.1.7
 ```
 
 Run the interactive management server creation script:
 
 ```
-kamatera-cluster.sh "0.0.3" "your-private-network-name"
+kamatera-cluster.sh "0.0.4" "lan-12345-private-network-name"
 ```
 
 ## Initialize Rancher
@@ -87,12 +100,6 @@ NFS mount path should be a subpath under /srv/default/
 
 Access the Rancher web-UI at your domain and run the first time setup
 
-Set the default Docker for nodes to the supported version
-
-* Global > Settings > engine-install-url > edit
-    * Value: `https://releases.rancher.com/install-docker/18.09.1.sh`
-    * Save
-
 Add the Kamatera Docker Machine driver
 
 * Node Drivers > Add Node Driver >
@@ -100,34 +107,75 @@ Add the Kamatera Docker Machine driver
     * Create
 * Node Drivers > Wait for Kamatera driver to be active
 
-Create the cluster
+Create the clsuter with a single node serving all functions, we will add nodes later and separate control plane from worker nodes.
 
 * Clusters > Add cluster >
     * From nodes in an infrastructure provider: Kamatera
     * Cluster name: `my-cluster`
-    * controlplane node pool
-        * Name Prefix: `my-cluster-controlplane`
-        * Count: 1
-        * Template: create new template:
-            * apiClientId / apiSecret: set your Kamatera credentials
-            * Set options according to your requirements, see [Kamatera server options](https://console.kamatera.com/service/server) for the available options (must be logged-in to Kamatera console)
-            * CPU must be at least: `2B`
-            * RAM must be at least: `2048`
-            * Disk size must be at least: `30`
-            * Private Network Name: your-private-network-name
-            * Name: `kamatera-node`
-            * Engine options > Storage Driver: `overlay2`
-            * Create template
-        * set checkboxes: etcd, Control Plane
-    * workers node pool
-        * Name Prefix: `my-cluster-workers`
-        * Count: 2
-        * Template: `kamatera-node`
-        * Set checkboxes: etcd, workers
-    * Create cluster
-* Wait for cluster to be provisioned
-    * Some nodes might fail to create due to private IP allocation collision
-    * You can wait and Rancher will retry creation, or delete the failed nodes to speed-up the retry
+* add the controlplane node pool
+    * Name Prefix: `my-cluster-controlplane`
+    * Count: 1
+    * Template: create new template:
+        * apiClientId / apiSecret: set your Kamatera credentials
+        * Set options according to your requirements, see [Kamatera server options](https://console.kamatera.com/service/server) for the available options (must be logged-in to Kamatera console)
+        * CPU must be at least: `2B`
+        * RAM must be at least: `2048`
+        * Disk size must be at least: `30`
+        * Private Network Name: your-private-network-name
+        * Name: `kamatera-node`
+        * Engine options > Storage Driver: `overlay2`
+        * Create template
+    * set checkboxes: etcd, Control Plane, workers (on next step we will separate workers from control plane)
+* Create cluster
+
+Wait for controlplane node status to be `Active`
+
+**important** There is a known issue in the Rancher server we are using (2.1.7).
+To ensure smooth clust creation, nodes should be added one at a time,
+waiting for each one to be in `Active` status before adding the next one.
+(This bug should be resolved in Rancher 2.2.x when it's released)
+
+Add worker node pool and 1st worker node
+
+* edit cluster > Add node pool
+    * Name Prefix: `my-cluster-workers`
+    * Count: 1
+    * Template: `kamatera-node`
+    * Set checkbox: workers
+
+Add an additional worker node:
+
+* Cluster nodes > Click on `+` button to add another node to the workers node pool.
+
+Wait for the additional worker node to be in `Active` status.
+
+**troubleshooting cluster creation errors**
+
+Most errors which appear during clsuter creation will resolve after a few minutes.
+
+Get detailed error log from Rancher:
+
+```
+docker-machine ssh DOCKER_MACHINE_NAME docker logs rancher
+```
+
+Check docker engine version:
+
+* Global > Settings > engine-install-url >
+    * Should be Docker `18.09`
+
+**Enable high-availability**
+
+Enable high-availability for the `etcd` cluster and separate workers from controlplane:
+
+* Edit cluster >
+  * check the `etcd` checkbox for the workers node pool
+  * uncheck the `workers` checkbox for the controlplane node pool
+  * Save
+
+**important** Wait for roles column to be updated in nodes list.
+Controlplane nodes should have `etcd` and `controlplane` roles,
+worker nodes should have `etcd` and `workers` roles.
 
 ## Install a storage class
 
@@ -138,7 +186,10 @@ Deploy the nfs-client-provisioner:
 * Default > Catalog Apps > Launch nfs-client-provisioner chart:
     * Set the following values:
         * `nfs.server=x.x.x.x`
+          * using above installation steps, this should be the private IP of the main docker machine
+          * you can get the IP from Kamatera console
         * `nfs.path=/srv/default`
+    * Launch
 
 ## Install private Docker registry
 
@@ -161,6 +212,7 @@ Copy the last output line and use as the secrets.htpasswd value
         * `persistence.enabled = true`
         * `persistence.size = 20Gi`
         * `persistence.storageClass = nfs-client`
+    * Launch
 
 Add the registry to Rancher
 
@@ -170,6 +222,13 @@ Add the registry to Rancher
     * Address: custom - `localhost:5000` - REGISTRY_USERNAME - REGISTRY_PASSWORD
     * Save
 
+**important** Rancher pipelines and registry support is alpha quality.
+
+If you encounter problems pushing images to the registry, try to use an external registry (e.g. a private registry on Docker Hub or GitLab).
+
+If you encounter problems with the Rancher pipelines, try to use an external pipelines service or deploy a different pipeline solution.
+
+
 ## Deploy test workloads
 
 * Rancher > your-cluster > default >
@@ -177,7 +236,8 @@ Add the registry to Rancher
         * Name: `postgres`
         * Scalable deployment of `3` pods
         * Docker image: `postgres`
-        * Namespace: `test`
+        * Namespace:
+          * Add  to a new namespace: `test`
         * Add port: 5432 - TCP - Cluster IP - Same as container port
         * Environment variables > Add variable > `POSTGRES_PASSWORD=123456`
         * Launch
@@ -372,18 +432,21 @@ stages:
       buildContext: .
       tag: test-web-app
       pushRemote: true
-      registry: docker-registry.docker-registry
+      registry: localhost:5000
 timeout: 240
 ```
+
+The registry value should match the address of a configured registry under Resources > Registries.
 
 Setup Rancher pipelines to build your Docker image
 
 * Rancher web-ui > your cluster > Default > Resources > Pipelines >
     * Follow the instructions to connect your private GitHub repository
     * Enable pipelines for the test-web-app repository
-    * Trigger the test-web-app pipeline
+    * Run the test-web-app pipeline
+      * Click the action menu > Run
     * On first pipeline run it may take a few minutes for Rancher to install Jenkins
-    * If a job fails, try to Rerun it
+    * First job run may fail, if it does, wait a few minutes, then rerun it and it should work the 2nd run.
 
 Deploy the web-app workload using the published image
 
