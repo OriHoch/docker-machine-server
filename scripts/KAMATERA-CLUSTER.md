@@ -172,6 +172,8 @@ Add worker node pool and 1st worker node
     * Count: 1
     * Template: `kamatera-node`
     * Set checkbox: workers
+    
+Wait for worker node to be in `Active` status
 
 Add an additional worker node:
 
