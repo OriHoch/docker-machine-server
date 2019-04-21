@@ -32,7 +32,7 @@ Make sure you have all the required prerequisites before starting:
 Install the `docker-machine-server.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.4/docker-machine-server.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.5/docker-machine-server.sh \
     | sudo tee /usr/local/bin/docker-machine-server.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/docker-machine-server.sh
 ```
@@ -40,7 +40,7 @@ sudo chmod +x /usr/local/bin/docker-machine-server.sh
 Install the `kamatera-cluster.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.4/scripts/kamatera-cluster.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.5/scripts/kamatera-cluster.sh \
     | sudo tee /usr/local/bin/kamatera-cluster.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 ```
@@ -56,7 +56,7 @@ export RANCHER_VERSION=v2.2.2
 Run the interactive management server creation script:
 
 ```
-kamatera-cluster.sh "0.0.4" "lan-12345-private-network-name"
+kamatera-cluster.sh "0.0.5" "lan-12345-private-network-name"
 ```
 
 **troubleshooting server creation**
@@ -133,7 +133,7 @@ Access the Rancher web-UI at your domain and run the first time setup
 Add the Kamatera Docker Machine driver
 
 * Tools > Drivers > Node Drivers > Add Node Driver >
-    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.0-RC2/docker-machine-driver-kamatera_v1.0.0-RC2_linux_amd64.tar.gz`
+    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.1/docker-machine-driver-kamatera_v1.0.1_linux_amd64.tar.gz`
     * Create
 * Wait for Kamatera driver to be active
 
