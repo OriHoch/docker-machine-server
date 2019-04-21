@@ -157,7 +157,7 @@ install_or_update_rancher() {
     if docker ps | grep rancher; then
         echo Rancher already installed
     else
-        RANCHER_IMAGE="rancher/rancher:${RANCHER_VERSION:-v2.1.7}"
+        RANCHER_IMAGE="rancher/rancher:${RANCHER_VERSION:-v2.2.2}"
         echo "Installing Rancher (${RANCHER_IMAGE})"
         docker-machine ssh $(docker-machine active) sudo mkdir -p /var/lib/rancher &&\
         docker run -d --name rancher --restart unless-stopped -p 8000:80 \

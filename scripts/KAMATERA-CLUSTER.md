@@ -50,7 +50,7 @@ sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 Set the Rancher version, leave empty to use the default:
 
 ```
-export RANCHER_VERSION=v2.1.7
+export RANCHER_VERSION=v2.2.2
 ```
 
 Run the interactive management server creation script:
@@ -95,7 +95,7 @@ Access the Rancher web-ui and run the initial setup
 
 Enable the Helm Stable catalog:
 
-* Global > Catalogs > Enable Helm Stable catalog
+* Global > Apps > Manage Catalogs > Enable Helm Stable catalog
 
 ## Deploy an NFS server for cluster storage
 
@@ -132,10 +132,10 @@ Access the Rancher web-UI at your domain and run the first time setup
 
 Add the Kamatera Docker Machine driver
 
-* Node Drivers > Add Node Driver >
+* Tools > Drivers > Node Drivers > Add Node Driver >
     * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.0-RC2/docker-machine-driver-kamatera_v1.0.0-RC2_linux_amd64.tar.gz`
     * Create
-* Node Drivers > Wait for Kamatera driver to be active
+* Wait for Kamatera driver to be active
 
 Create the clsuter with a single node serving all functions, we will add nodes later and separate control plane from worker nodes.
 
@@ -155,31 +155,17 @@ Create the clsuter with a single node serving all functions, we will add nodes l
         * Name: `kamatera-node`
         * Engine options > Storage Driver: `overlay2`
         * Create template
-    * set checkboxes: etcd, Control Plane, workers (on next step we will separate workers from control plane)
-* Create cluster
-
-Wait for controlplane node status to be `Active`
-
-**important** There is a known issue in the Rancher server we are using (2.1.7).
-To ensure smooth clust creation, nodes should be added one at a time,
-waiting for each one to be in `Active` status before adding the next one.
-(This bug should be resolved in Rancher 2.2.x when it's released)
-
-Add worker node pool and 1st worker node
-
-* edit cluster > Add node pool
+    * set checkboxes: etcd, Control Plane
+* add the workers node pool
     * Name Prefix: `my-cluster-workers`
     * Count: 1
     * Template: `kamatera-node`
-    * Set checkbox: workers
-    
-Wait for worker node to be in `Active` status
+    * Set checkboxes: etcd, workers
+* Create cluster
 
-Add an additional worker node:
+Wait for all nodes to be in `Active` status.
 
-* Cluster nodes > Click on `+` button to add another node to the workers node pool.
-
-Wait for the additional worker node to be in `Active` status.
+If you see some errors, just wait and they will be resolved automatically.
 
 **troubleshooting cluster creation errors**
 
@@ -195,19 +181,6 @@ Check docker engine version:
 
 * Global > Settings > engine-install-url >
     * Should be Docker `18.09`
-
-**Enable high-availability**
-
-Enable high-availability for the `etcd` cluster and separate workers from controlplane:
-
-* Edit cluster >
-  * check the `etcd` checkbox for the workers node pool
-  * uncheck the `workers` checkbox for the controlplane node pool
-  * Save
-
-**important** Wait for roles column to be updated in nodes list.
-Controlplane nodes should have `etcd` and `controlplane` roles,
-worker nodes should have `etcd` and `workers` roles.
 
 ## Install a storage class
 
@@ -253,13 +226,6 @@ Add the registry to Rancher
     * Available to all namespaces in project
     * Address: custom - `localhost:5000` - REGISTRY_USERNAME - REGISTRY_PASSWORD
     * Save
-
-**important** Rancher pipelines and registry support is alpha quality.
-
-If you encounter problems pushing images to the registry, try to use an external registry (e.g. a private registry on Docker Hub or GitLab).
-
-If you encounter problems with the Rancher pipelines, try to use an external pipelines service or deploy a different pipeline solution.
-
 
 ## Deploy test workloads
 
