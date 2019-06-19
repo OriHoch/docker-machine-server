@@ -50,7 +50,7 @@ sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 Set the Rancher version, leave empty to use the default:
 
 ```
-export RANCHER_VERSION=v2.2.2
+export RANCHER_VERSION=v2.2.4
 ```
 
 Run the interactive management server creation script:
@@ -66,7 +66,7 @@ It will re-initialize which may fix some problems encountered in initial setup d
 
 In case of errors with not being able to reach the web-ui, run the following to reinitialize:
 
-Set environment variables:
+Set environment variables (**only needed in case of problems**):
 
 ```
 RANCHER_MACHINE_NAME=
@@ -77,7 +77,7 @@ LETSENCRYPT_DOMAIN="${RANCHER_DOMAIN_NAME}"
 CERTBOT_DOMAINS="${LETSENCRYPT_DOMAIN}"
 ```
 
-Run the initialization commands:
+Run the initialization commands (**only needed in case of problems**):
 
 * Install Nginx and Let's Encrypt:
   * `docker-machine ssh "${RANCHER_MACHINE_NAME}" sudo docker-machine-server install_nginx_ssl`
@@ -95,7 +95,8 @@ Access the Rancher web-ui and run the initial setup
 
 Enable the Helm Stable catalog:
 
-* Global > Apps > Manage Catalogs > Enable Helm Stable catalog
+* Tools > Catalogs > Enable Helm Stable catalog
+
 
 ## Deploy an NFS server for cluster storage
 
@@ -133,11 +134,11 @@ Access the Rancher web-UI at your domain and run the first time setup
 Add the Kamatera Docker Machine driver
 
 * Tools > Drivers > Node Drivers > Add Node Driver >
-    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.1/docker-machine-driver-kamatera_v1.0.1_linux_amd64.tar.gz`
+    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.2/docker-machine-driver-kamatera_v1.0.2_linux_amd64.tar.gz`
     * Create
 * Wait for Kamatera driver to be active
 
-Create the clsuter with a single node serving all functions, we will add nodes later and separate control plane from worker nodes.
+Create the cluster with a single node serving all functions, we will add nodes later and separate control plane from worker nodes.
 
 * Clusters > Add cluster >
     * From nodes in an infrastructure provider: Kamatera
