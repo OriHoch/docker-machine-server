@@ -18,6 +18,8 @@ Make sure you have all the required prerequisites before starting:
 
 ## (optional) Create an internal VLAN network
 
+This is used for secure access to private NFS / storage / DB servers
+
 * From the Kamatera console web-ui:
     * My Cloud > Networks > Create New Network:
         * VLAN Name: my-cluster
@@ -29,10 +31,16 @@ Make sure you have all the required prerequisites before starting:
 
 ## Create and setup the cluster management machine
 
+Set the docker-machine-server version:
+
+```
+export DOCKER_MACHINE_SERVER_VERSION="v0.0.5"
+```
+
 Install the `docker-machine-server.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.5/docker-machine-server.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/${DOCKER_MACHINE_SERVER_VERSION}/docker-machine-server.sh \
     | sudo tee /usr/local/bin/docker-machine-server.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/docker-machine-server.sh
 ```
@@ -40,7 +48,7 @@ sudo chmod +x /usr/local/bin/docker-machine-server.sh
 Install the `kamatera-cluster.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.5/scripts/kamatera-cluster.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/${DOCKER_MACHINE_SERVER_VERSION}/scripts/kamatera-cluster.sh \
     | sudo tee /usr/local/bin/kamatera-cluster.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 ```
@@ -58,7 +66,7 @@ Run the interactive management server creation script:
 (If you skipped the private network creation, set the private network name to: `""`)
 
 ```
-kamatera-cluster.sh "0.0.5" "lan-12345-private-network-name"
+kamatera-cluster.sh "${DOCKER_MACHINE_SERVER_VERSION}" "lan-12345-private-network-name"
 ```
 
 **troubleshooting server creation**
@@ -147,6 +155,33 @@ Check docker engine version:
     * Should be Docker `19.03`
 
 That's it, you can now use the cluster.
+
+## Upgrading Rancher
+
+ssh to the management server
+
+```
+docker-machine ssh MANAGEMENT_DOCKER_MACHINE_NAME
+```
+
+Choose the image of Rancher you want to update to, it's recommended to use rancher/rancher:stable
+
+```
+RANCHER_IMAGE="rancher/rancher:stable"
+```
+
+Before upgrading it's recommended to check the Rancher release notes:
+
+https://github.com/Rancher/rancher/releases
+
+Upgrade
+
+```
+docker pull $RANCHER_IMAGE &&\
+docker rm -f rancher &&\
+docker run -d --name rancher --restart unless-stopped -p 8000:80 \
+           -v "/var/lib/rancher:/var/lib/rancher" "${RANCHER_IMAGE}"
+```
 
 ## Optional Components
 
