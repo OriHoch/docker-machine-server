@@ -16,7 +16,7 @@ Make sure you have all the required prerequisites before starting:
 * Verify docker-machine version - script was tested with Docker Machine v0.16.1
   * `docker-machine version`
 
-## Create an internal VLAN network
+## (optional) Create an internal VLAN network
 
 * From the Kamatera console web-ui:
     * My Cloud > Networks > Create New Network:
@@ -45,15 +45,17 @@ curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v0.0.
 sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 ```
 
-**important** Make sure no other Docker Machines are being created in parallel, this may cause errors in machine creation in some conditions.
+**important** Docker Machine has problems with large number of machines. Make sure no other Docker Machines are being created in parallel, and that the list of machines does not contain many errored / timed out machines.
 
-Set the Rancher version, leave empty to use the default:
+Set Rancher to the supported version:
 
 ```
-export RANCHER_VERSION=v2.2.4
+export RANCHER_VERSION=v2.3.2
 ```
 
 Run the interactive management server creation script:
+
+(If you skipped the private network creation, set the private network name to: `""`)
 
 ```
 kamatera-cluster.sh "0.0.5" "lan-12345-private-network-name"
@@ -93,12 +95,68 @@ Run the initialization commands (**only needed in case of problems**):
 
 Access the Rancher web-ui and run the initial setup
 
-Enable the Helm Stable catalog:
+## Create a Kubernetes cluster using Rancher
+
+Access the Rancher web-UI at your domain and run the first time setup
+
+Add the Kamatera Docker Machine driver
+
+* Tools > Drivers > Node Drivers > Add Node Driver >
+    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.4/docker-machine-driver-kamatera_v1.0.4_linux_amd64.tar.gz`
+    * Create
+* Wait for Kamatera driver to be active
+
+Create the cluster:
+
+* Clusters > Add cluster >
+    * From nodes in an infrastructure provider: Kamatera
+    * Cluster name: `my-cluster`
+* add the controlplane node pool
+    * Name Prefix: `controlplane-worker`
+    * Count: 1
+    * Template: create new template:
+        * apiClientId / apiSecret: set your Kamatera credentials
+        * Set options according to your requirements, see [Kamatera server options](https://console.kamatera.com/service/server) for the available options (must be logged-in to Kamatera console)
+        * CPU must be at least: `2B`
+        * RAM must be at least: `2048`
+        * Disk size must be at least: `30`
+        * (optional) Private Network Name: your-private-network-name
+        * Name: `kamatera-node`
+        * Engine options > Storage Driver: `overlay2`
+        * Create template
+    * set checkboxes: etcd, Control Plane, Workers
+* Create cluster
+
+Wait for all nodes to be in `Active` status.
+
+If you see some errors, just wait and they will be resolved automatically.
+
+**troubleshooting cluster creation errors**
+
+Most errors which appear during clsuter creation will resolve after a few minutes.
+
+Get detailed error log from Rancher:
+
+```
+docker-machine ssh DOCKER_MACHINE_NAME docker logs rancher
+```
+
+Check docker engine version:
+
+* Global > Settings > engine-install-url >
+    * Should be Docker `19.03`
+
+That's it, you can now use the cluster.
+
+## Optional Components
+
+Following are some optional components you can add to the cluster
+
+### Enable the Helm Stable apps catalog
 
 * Tools > Catalogs > Enable Helm Stable catalog
 
-
-## Deploy an NFS server for cluster storage
+### Deploy an NFS server for cluster storage
 
 You can deploy the NFS server to the management machine or a dedicated machine
 
@@ -127,63 +185,7 @@ To use this NFS share, use the private IP from any machine on the same network.
 
 NFS mount path should be a subpath under /srv/default/
 
-## Create a Kubernetes cluster using Rancher
-
-Access the Rancher web-UI at your domain and run the first time setup
-
-Add the Kamatera Docker Machine driver
-
-* Tools > Drivers > Node Drivers > Add Node Driver >
-    * Downlad URL: `https://github.com/OriHoch/docker-machine-driver-kamatera/releases/download/v1.0.2/docker-machine-driver-kamatera_v1.0.2_linux_amd64.tar.gz`
-    * Create
-* Wait for Kamatera driver to be active
-
-Create the cluster with a single node serving all functions, we will add nodes later and separate control plane from worker nodes.
-
-* Clusters > Add cluster >
-    * From nodes in an infrastructure provider: Kamatera
-    * Cluster name: `my-cluster`
-* add the controlplane node pool
-    * Name Prefix: `my-cluster-controlplane`
-    * Count: 1
-    * Template: create new template:
-        * apiClientId / apiSecret: set your Kamatera credentials
-        * Set options according to your requirements, see [Kamatera server options](https://console.kamatera.com/service/server) for the available options (must be logged-in to Kamatera console)
-        * CPU must be at least: `2B`
-        * RAM must be at least: `2048`
-        * Disk size must be at least: `30`
-        * Private Network Name: your-private-network-name
-        * Name: `kamatera-node`
-        * Engine options > Storage Driver: `overlay2`
-        * Create template
-    * set checkboxes: etcd, Control Plane
-* add the workers node pool
-    * Name Prefix: `my-cluster-workers`
-    * Count: 1
-    * Template: `kamatera-node`
-    * Set checkboxes: etcd, workers
-* Create cluster
-
-Wait for all nodes to be in `Active` status.
-
-If you see some errors, just wait and they will be resolved automatically.
-
-**troubleshooting cluster creation errors**
-
-Most errors which appear during clsuter creation will resolve after a few minutes.
-
-Get detailed error log from Rancher:
-
-```
-docker-machine ssh DOCKER_MACHINE_NAME docker logs rancher
-```
-
-Check docker engine version:
-
-* Global > Settings > engine-install-url >
-    * Should be Docker `18.09`
-
-## Install a storage class
+### Install a storage class
 
 A storage class allows deployments to use the NFS server from any workload
 
@@ -197,7 +199,7 @@ Deploy the nfs-client-provisioner:
         * `nfs.path=/srv/default`
     * Launch
 
-## Install private Docker registry
+### Install private Docker registry
 
 Deploy docker-registry to provide private registry services to the cluster
 
@@ -228,7 +230,7 @@ Add the registry to Rancher
     * Address: custom - `localhost:5000` - REGISTRY_USERNAME - REGISTRY_PASSWORD
     * Save
 
-## Deploy test workloads
+### Deploy test workloads
 
 * Rancher > your-cluster > default >
     * Workloads > Deploy >
@@ -299,7 +301,7 @@ Close the Rancher ubuntu shell
         * You can see this workload is served by 3 pods
         * The pods don't share any volumes, so each DB is independent
 
-### Add a sidecar to the postgres workload
+#### Add a sidecar to the postgres workload
 
 To make sure all DBs have the same table and row on startup we could use a sidecar
 
@@ -375,7 +377,7 @@ PGPASSWORD=123456 psql -h postgres -U postgres -d postgres -c "select * from foo
 
 Rerun the last command a few times to make sure it returns successfully each time
 
-### Create a web-app
+#### Create a web-app
 
 This DB doesn't do anything useful without a web-app
 
@@ -485,7 +487,7 @@ curl -H "Host: test-web-app.your-domain.com" http://your.node.ip.address/
 
 You can now set a DNS A record to that IP and set an SSL certificate by editing the web-app Ingress
 
-## Cleanup
+### Cleanup
 
 The cleanup script at `scripts/kamatera-cleanup.py` in this repository can be used to delete all kamatera servers in your account
 
