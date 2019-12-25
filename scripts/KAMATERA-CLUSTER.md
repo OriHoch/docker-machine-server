@@ -34,13 +34,13 @@ This is used for secure access to private NFS / storage / DB servers
 Set the docker-machine-server version:
 
 ```
-export DOCKER_MACHINE_SERVER_VERSION="v0.0.5"
+export DOCKER_MACHINE_SERVER_VERSION="0.0.5"
 ```
 
 Install the `docker-machine-server.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/${DOCKER_MACHINE_SERVER_VERSION}/docker-machine-server.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v${DOCKER_MACHINE_SERVER_VERSION}/docker-machine-server.sh \
     | sudo tee /usr/local/bin/docker-machine-server.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/docker-machine-server.sh
 ```
@@ -48,7 +48,7 @@ sudo chmod +x /usr/local/bin/docker-machine-server.sh
 Install the `kamatera-cluster.sh` script:
 
 ```
-curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/${DOCKER_MACHINE_SERVER_VERSION}/scripts/kamatera-cluster.sh \
+curl -s -L https://raw.githubusercontent.com/OriHoch/docker-machine-server/v${DOCKER_MACHINE_SERVER_VERSION}/scripts/kamatera-cluster.sh \
     | sudo tee /usr/local/bin/kamatera-cluster.sh >/dev/null &&\
 sudo chmod +x /usr/local/bin/kamatera-cluster.sh
 ```
